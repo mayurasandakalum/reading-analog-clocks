@@ -1,87 +1,64 @@
 import cv2
 import numpy as np
 
+# Load the mask image (result from your earlier processing)
+mask = cv2.imread("../data/test_images/test-clock-6.jpg", cv2.IMREAD_GRAYSCALE)
 
-def nothing(x):
-    pass
+# Desired new height for the display window
+new_height = 500  # You can adjust this value as needed
 
+# Calculate the aspect ratio of the mask image
+original_height, original_width = mask.shape[:2]
+aspect_ratio = original_width / original_height
 
-# Load image
-image = cv2.imread("../data/test_images/test-clock-6.jpg")
+# Calculate the new width to maintain the aspect ratio
+new_width = int(new_height * aspect_ratio)
 
-# Desired new height
-new_height = 600  # Set your desired height
+# Resize the mask image for display
+resized_mask = cv2.resize(mask, (new_width, new_height), interpolation=cv2.INTER_AREA)
 
-# Get original dimensions
-height, width = image.shape[:2]
+# Find contours of the hands in the resized mask
+contours, _ = cv2.findContours(resized_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-# Calculate new width to maintain aspect ratio
-new_width = int(width * new_height / height)
+# Load and resize the original image to match the new dimensions
+original_img = cv2.imread("../data/test_images/test-clock-6.jpg")
+original_img_resized = cv2.resize(
+    original_img, (new_width, new_height), interpolation=cv2.INTER_AREA
+)
 
-# Resize the image
-image = cv2.resize(image, (new_width, new_height))
+# Iterate over each detected contour
+for contour in contours:
+    # Find the bounding rectangle of each contour
+    rect = cv2.minAreaRect(contour)
+    box = cv2.boxPoints(rect)
+    box = np.int0(box)
 
-# Create a window
-cv2.namedWindow("image")
+    # Calculate the center and the angle of the line
+    center = tuple(np.int0(rect[0]))
+    angle = rect[2]
 
-# Create trackbars for color change
-# Hue is from 0-179 for Opencv
-cv2.createTrackbar("HMin", "image", 0, 179, nothing)
-cv2.createTrackbar("SMin", "image", 0, 255, nothing)
-cv2.createTrackbar("VMin", "image", 0, 255, nothing)
-cv2.createTrackbar("HMax", "image", 0, 179, nothing)
-cv2.createTrackbar("SMax", "image", 0, 255, nothing)
-cv2.createTrackbar("VMax", "image", 0, 255, nothing)
+    # If the rectangle is almost vertical (fix OpenCV angle range issue)
+    if angle < -45:
+        angle += 90
 
-# Set default value for Max HSV trackbars
-cv2.setTrackbarPos("HMax", "image", 179)
-cv2.setTrackbarPos("SMax", "image", 255)
-cv2.setTrackbarPos("VMax", "image", 255)
+    # Draw the contour center point
+    cv2.circle(original_img_resized, center, 5, (0, 255, 0), -1)
 
-# Initialize HSV min/max values
-hMin = sMin = vMin = hMax = sMax = vMax = 0
-phMin = psMin = pvMin = phMax = psMax = pvMax = 0
+    # Calculate the line endpoints based on angle
+    length = 150  # Length of the line (adjust as needed)
+    x_end = int(center[0] + length * np.cos(np.radians(angle)))
+    y_end = int(center[1] + length * np.sin(np.radians(angle)))
 
-while True:
-    # Get current positions of all trackbars
-    hMin = cv2.getTrackbarPos("HMin", "image")
-    sMin = cv2.getTrackbarPos("SMin", "image")
-    vMin = cv2.getTrackbarPos("VMin", "image")
-    hMax = cv2.getTrackbarPos("HMax", "image")
-    sMax = cv2.getTrackbarPos("SMax", "image")
-    vMax = cv2.getTrackbarPos("VMax", "image")
+    x_start = int(center[0] - length * np.cos(np.radians(angle)))
+    y_start = int(center[1] - length * np.sin(np.radians(angle)))
 
-    # Set minimum and maximum HSV values to display
-    lower = np.array([hMin, sMin, vMin])
-    upper = np.array([hMax, sMax, vMax])
+    # Draw the line
+    cv2.line(original_img_resized, (x_start, y_start), (x_end, y_end), (0, 0, 255), 2)
 
-    # Convert to HSV format and color threshold
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, lower, upper)
-    result = cv2.bitwise_and(image, image, mask=mask)
-
-    # Print if there is a change in HSV value
-    if (
-        (phMin != hMin)
-        or (psMin != sMin)
-        or (pvMin != vMin)
-        or (phMax != hMax)
-        or (psMax != sMax)
-        or (pvMax != vMax)
-    ):
-        print(
-            f"(hMin = {hMin} , sMin = {sMin}, vMin = {vMin}), (hMax = {hMax} , sMax = {sMax}, vMax = {vMax})"
-        )
-        phMin = hMin
-        psMin = sMin
-        pvMin = vMin
-        phMax = hMax
-        psMax = sMax
-        pvMax = vMax
-
-    # Display result image
-    cv2.imshow("image", result)
-    if cv2.waitKey(10) & 0xFF == ord("q"):
-        break
-
+# Show the resulting image with lines drawn
+cv2.imshow("Clock Hands", original_img_resized)
+cv2.waitKey(0)
 cv2.destroyAllWindows()
+
+# Optionally save the resulting image
+cv2.imwrite("../data/clock_hands_with_lines_resized.png", original_img_resized)
