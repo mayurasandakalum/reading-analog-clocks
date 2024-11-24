@@ -6,26 +6,43 @@ def nothing(x):
     pass
 
 
-# Load image
-image = cv2.imread("../data/test_images/20241102_134404.jpg")
+# List of image paths
+image_paths = [
+    "../data/test_images/test-clock-6.jpg",
+    "../data/test_images/test-clock-7.jpg",
+    "../data/test_images/captured-images/20241102_140018.jpg",
+]
 
 # Desired new height
-new_height = 600  # Set your desired height
+new_height = 300  # Adjust the height as needed
 
-# Get original dimensions
-height, width = image.shape[:2]
 
-# Calculate new width to maintain aspect ratio
-new_width = int(width * new_height / height)
+# Function to resize images
+def resize_image(image, new_height):
+    height, width = image.shape[:2]
+    new_width = int(width * new_height / height)
+    return cv2.resize(image, (new_width, new_height))
 
-# Resize the image
-image = cv2.resize(image, (new_width, new_height))
+
+# Load and resize images
+images = []
+for path in image_paths:
+    img = cv2.imread(path)
+    if img is not None:
+        img = resize_image(img, new_height)
+        images.append(img)
+    else:
+        print(f"Failed to load image at path: {path}")
+
+# Check if images list is not empty
+if not images:
+    print("No images to display.")
+    exit()
 
 # Create a window
 cv2.namedWindow("image")
 
 # Create trackbars for color change
-# Hue is from 0-179 for Opencv
 cv2.createTrackbar("HMin", "image", 0, 179, nothing)
 cv2.createTrackbar("SMin", "image", 0, 255, nothing)
 cv2.createTrackbar("VMin", "image", 0, 255, nothing)
@@ -38,8 +55,7 @@ cv2.setTrackbarPos("HMax", "image", 179)
 cv2.setTrackbarPos("SMax", "image", 255)
 cv2.setTrackbarPos("VMax", "image", 255)
 
-# Initialize HSV min/max values
-hMin = sMin = vMin = hMax = sMax = vMax = 0
+# Initialize variables to store previous trackbar values
 phMin = psMin = pvMin = phMax = psMax = pvMax = 0
 
 while True:
@@ -55,10 +71,18 @@ while True:
     lower = np.array([hMin, sMin, vMin])
     upper = np.array([hMax, sMax, vMax])
 
-    # Convert to HSV format and color threshold
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, lower, upper)
-    result = cv2.bitwise_and(image, image, mask=mask)
+    # Initialize list to store processed images
+    results = []
+
+    # Process each image
+    for img in images:
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        mask = cv2.inRange(hsv, lower, upper)
+        result = cv2.bitwise_and(img, img, mask=mask)
+        results.append(result)
+
+    # Concatenate images horizontally
+    combined_result = np.hstack(results)
 
     # Print if there is a change in HSV value
     if (
@@ -70,7 +94,7 @@ while True:
         or (pvMax != vMax)
     ):
         print(
-            f"(hMin = {hMin} , sMin = {sMin}, vMin = {vMin}), (hMax = {hMax} , sMax = {sMax}, vMax = {vMax})"
+            f"(hMin = {hMin}, sMin = {sMin}, vMin = {vMin}), (hMax = {hMax}, sMax = {sMax}, vMax = {vMax})"
         )
         phMin = hMin
         psMin = sMin
@@ -79,8 +103,8 @@ while True:
         psMax = sMax
         pvMax = vMax
 
-    # Display result image
-    cv2.imshow("image", result)
+    # Display combined image
+    cv2.imshow("image", combined_result)
     if cv2.waitKey(10) & 0xFF == ord("q"):
         break
 
